@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Нейросети</title>
+        <script src="https://code.jquery.com/jquery-3.7.1.js" integrity="sha256-eKhayi8LEQwp4NKxN+CfCh+3qOVUtJn3QNZ0TciWLP4=" crossorigin="anonymous"></script>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+        <style>
+            *{
+                color:beige;
+            }
+            body{
+                background-color: #232222;
+            }
+        </style>
+    </head>
+    
+    <body>
+       <header>
+        <nav>
+            <div class="nav-wrapper #009a22 indigo darken-4">
+              <a href="#" class="brand-logo center">Нейросети</a>
+            </div>
+          </nav>
+       </header>
+       <div class="container" >
+        <div style="padding-top: 5%;" class="row">
+           <form id="sendnews" class="col s12">
+             <div class="row" style="background-color: rgb(76, 83, 89);">
+                       <div class="input-field col s12 m10">
+                           <input name="new_head" id="new_head" type="text" class="validate" data-length="130">
+                           <label for="new_head">Заголовок (НЕ ПИШИТЕ ВСЁ В ВЕРХНЕМ РЕГИСТРЕ, выключайте CapsLock!)</label>
+                       </div>     
+                       <div class="input-field col s6 m6">
+                        <input  name="beam" id="beam" type="text" class="validate" data-length="130" value="2">
+                        <label for="new_head">Лучи</label>
+                    </div>   
+                    <div class="input-field col s6 m6">
+                        <input  name="temp" id="temp" type="text" class="validate" data-length="130" value="1.5">
+                        <label for="new_head">Температура</label>
+                    </div> 
+                    <div class="input-field col s6 m6">
+                        <input  name="min" id="min" type="text" class="validate" data-length="130" value="2">
+                        <label for="new_head">Мин</label>
+                    </div>  
+                    <div class="input-field col s6 m6">
+                        <input  name="max" id="max" type="text" class="validate" data-length="1000" value="10">
+                        <label for="new_head">Макс</label>
+                    </div>  
+                       <div class="input-field col s12 m2">
+                        <button class="btn waves-effect waves-light" id="create">Отправить
+                            <i class="material-icons right">send</i>
+                        </button>
+                       </div>  
+                       <div class="input-field col s12">
+                        <div id="load" class="progress">
+                            <div class="indeterminate"></div>
+                        </div>
+                       </div>   
+                       <div class="input-field col s12">
+                        <textarea placeholder="Основное содержание" name="new_text" id="new_text" class="materialize-textarea"></textarea>
+                        <label for="new_text">Содержание</label>
+                    </div>                 
+              </div>            
+            </div>
+           </form>
+         </div>
+       
+         <script>
+            $( "#load" ).hide()
+           $( "#create" ).click(function(){
+            event.preventDefault()
+            $( "#load" ).show()
+            let cont = $( "#new_head" ).val()
+            if (cont!='') {
+                $.get( "/send", {req:cont,beam:$( "#beam" ).val(),temp:$( "#temp" ).val(),min:$( "#min" ).val(),max:$( "#max" ).val()} )
+                .done(function( data ) {
+                    console.log(data);
+                    data = `${data.req}\n${data.ans}\n`
+                    let old = $( "#new_text" ).val()
+                    $( "#new_text" ).val(`${data}\n\n${old}`)
+                    $( "#load" ).hide()
+                    M.textareaAutoResize($('#new_text'));
+                });
+            } else {
+                M.toast({html: 'Заполните заголовок!', classes: '#ef5350 red lighten-1 rounded'});
+            }
+          
+           })
+
+           if (Cookies.get('head')!=undefined){
+               $( "#new_head" ).val(Cookies.get('head'))
+           }
+           if (Cookies.get('text')!=undefined){
+               $( "#new_text" ).val(Cookies.get('text'))
+           }
+       
+           $( "#new_head" ).keydown(function() {
+             Cookies.set('head', $( "#new_head" ).val())
+           });
+           $( "#new_text" ).keydown(function() {
+             Cookies.set('text', $( "#new_text" ).val())
+           });
+         </script>
+    </body>
+</html>
