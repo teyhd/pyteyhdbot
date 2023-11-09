@@ -5,6 +5,18 @@ import os
 import re
 import time
 
+import PIL
+import requests
+import torch
+from diffusers import StableDiffusionInstructPix2PixPipeline, EulerAncestralDiscreteScheduler
+
+model_id = "timbrooks/instruct-pix2pix"
+pipe = StableDiffusionInstructPix2PixPipeline.from_pretrained(model_id, torch_dtype=torch.float16, safety_checker=None)
+pipe.to("cuda")
+pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
+
+#url = "https://raw.githubusercontent.com/timothybrooks/instruct-pix2pix/main/imgs/example.jpg"
+
 bot = telebot.TeleBot('token');
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -36,11 +48,6 @@ def getans(text,beam=2,min=50,max=100,context=None):
     generated_text = list(map(tokenizer.decode, out))[0]
     return generated_text
 
-beam=2
-#temp=1.9
-min=1
-max=2
-delstr = True
 
 beam=1
 
@@ -48,7 +55,7 @@ min=1
 max=10
 delstr = True
 self = False
-
+stepimg = 150
 def msg(message):
         global beam,hmodels,temp,min,max,model,model_name_or_path,delstr,self
         who = message.from_user.first_name
@@ -92,16 +99,19 @@ def msg(message):
 
 @bot.message_handler(content_types=['text'])
 def start(message):
-    global beam,hmodels,temp,min,max,model,model_name_or_path,delstr,self
+    global stepimg,beam,hmodels,temp,min,max,model,model_name_or_path,delstr,self
     #print(message.reply_to_message.text)
     if message.text == '/beam':
         bot.send_message(message.from_user.id, 'Сколько лучей поставить?')
         bot.register_next_step_handler(message,set_beam)
     elif message.text == '/start':
-        bot.send_message(message.from_user.id, '/mod - Сменить модель\n/beam - Сменить количество лучей\n/temp - Сменить температуру\n/min - Сменить минимальное количество символов\n/max - Сменить максимальное количество символов\n/del - Дублировать ваш ответ\nИли введите текст')
+        bot.send_message(message.from_user.id, '/mod - Сменить модель\n/beam - Сменить количество лучей\n/temp - Сменить температуру\n/min - Сменить минимальное количество символов\n/max - Сменить максимальное количество символов\n/del - Дублировать ваш ответ\n/stepimg - шагов обработки\n - Или введите текст')
     elif message.text == '/temp':
         bot.send_message(message.from_user.id, 'Укажи новую температуру')
         bot.register_next_step_handler(message,set_temp)
+    elif message.text == '/stepimg':
+        bot.send_message(message.from_user.id, 'Укажи количество шагов обработки')
+        bot.register_next_step_handler(message,set_step)        
     elif message.text == '/min':
         bot.send_message(message.from_user.id, 'Укажи минимальное количество символов')
         bot.register_next_step_handler(message,set_min)
@@ -123,7 +133,7 @@ def start(message):
             delstr=True
         bot.send_message(message.from_user.id, f"Удаление вашего сообщения: {delstr}")
     elif message.text == '/par':
-        bot.send_message(message.from_user.id, f"Параметры нейронной сети:\n/mod - модель:{model_name_or_path}\n/beam - {beam}\n/temp - {temp}\n/min - {min}\n/max - {max}\n/del - {delstr}\n/self - {self}")
+        bot.send_message(message.from_user.id, f"Параметры нейронной сети:\n/mod - модель:{model_name_or_path}\n/beam - {beam}\n/temp - {temp}\n/min - {min}\n/max - {max}\n/del - {delstr}\n/self - {self}\n/stepimg - {stepimg}")
     elif message.text == '/self':
         if self:
             self=False
@@ -153,6 +163,12 @@ def set_model(message):
             bot.send_message(message.from_user.id,'Устарновленна модель: '+message.text)
             return True
     bot.send_message(message.from_user.id,'Нет модели с номером: '+message.text)
+    bot.register_next_step_handler(message, start)
+
+def set_step(message):
+    global stepimg
+    stepimg = int(message.text)
+    bot.send_message(message.from_user.id,'Установил шагов: '+message.text)
     bot.register_next_step_handler(message, start)
 
 def set_beam(message):
@@ -191,16 +207,51 @@ from urllib.request import urlopen
 
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
-    print(message.text)
+    global stepimg
+    print(message.caption)
     photo = message.photo[-1]
     file_info = bot.get_file(photo.file_id)
     downloaded_file = bot.download_file(file_info.file_path)
-    save_path = 'photo.jpg'
+    save_path = f"img/{photo.file_id}photo.jpg"
+    new_path = f"newimg/{photo.file_id}photo.jpg"
     with open(save_path, 'wb') as new_file:
         new_file.write(downloaded_file)
-    with open(save_path, 'rb') as photo:
-      bot.send_photo(304622290, photo)
-    bot.reply_to(message, 'Я не умею обрабатывать картинки')
+    if message.from_user.id!=304622290:
+     with open(save_path, 'rb') as photo:
+       bot.send_photo(304622290, photo)
+    bot.reply_to(message, 'Я уже умею обрабатывать картинки. Пожалуйста, ждите ответа')
+    image = PIL.Image.open(save_path)
+    image = PIL.ImageOps.exif_transpose(image)
+    image = image.convert("RGB")
+    width, height = image.size
+    print(height)
+    minsize = 600
+    if height>width:
+     if height>minsize:
+           coef = height/minsize
+           neww = int(width/coef)
+           newsize = (neww, minsize)
+           image = image.resize(newsize)
+    else:
+     if width>minsize:
+           coef = width/minsize
+           neww = int(height/coef)
+           newsize = (minsize,neww)
+           image = image.resize(newsize)
+    if message.caption:
+        prompt = message.caption
+    else:
+        prompt = "Anime style"
+    #prompt = "turn him into cyborg"
+    #image.save("pic.jpg")
+    image = pipe(prompt, image=image, num_inference_steps=stepimg, image_guidance_scale=2).images
+    image[0].save(new_path)
+    with open(new_path, 'rb') as photo:
+      bot.send_photo(message.from_user.id, photo)
+    if message.from_user.id!=304622290:
+     with open(new_path, 'rb') as photo:
+        bot.send_photo(304622290, photo)
+
 
 
 @bot.message_handler(content_types=['document', 'video', 'audio', 'voice', 'sticker'])
